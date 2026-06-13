@@ -18,12 +18,36 @@ $db = Database::getInstance();
 $pdo = $db->getPDO();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $currentUserId = (int)($_SESSION['user_id'] ?? 0);
+
     if (isset($_POST['action'], $_POST['user_id']) && in_array($_POST['action'], ['make_admin', 'remove_admin'], true)) {
         $targetUserId = (int)$_POST['user_id'];
         $action = $_POST['action'] === 'make_admin' ? 1 : 0;
-        $pdo->prepare('UPDATE users SET is_admin = ? WHERE id = ?')->execute([$action, $targetUserId]);
-        $msg = $action ? '✅ تم منح الصلاحية للعضو المحدد' : '✅ تم إلغاء الصلاحية';
-        $type = 'success';
+        if ($targetUserId !== $currentUserId || $action === 0) {
+            $pdo->prepare('UPDATE users SET is_admin = ? WHERE id = ?')->execute([$action, $targetUserId]);
+            $msg = $action ? '✅ تم منح الصلاحية للعضو المحدد' : '✅ تم إلغاء الصلاحية';
+            $type = 'success';
+        } else {
+            $msg = '⚠️ لا يمكنك إزالة صلاحية حسابك الحالي';
+            $type = 'warning';
+        }
+    }
+
+    if (isset($_POST['action'], $_POST['user_id']) && $_POST['action'] === 'delete_user') {
+        $targetUserId = (int)$_POST['user_id'];
+        if ($targetUserId !== $currentUserId) {
+            $pdo->prepare('DELETE FROM user_tokens WHERE user_id = ?')->execute([$targetUserId]);
+            $pdo->prepare('DELETE FROM sessions WHERE user_id = ?')->execute([$targetUserId]);
+            $pdo->prepare('DELETE FROM user_folders WHERE user_id = ?')->execute([$targetUserId]);
+            $pdo->prepare('DELETE FROM repeat_requests WHERE user_id = ?')->execute([$targetUserId]);
+            $pdo->prepare('DELETE FROM error_logs WHERE user_id = ?')->execute([$targetUserId]);
+            $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$targetUserId]);
+            $msg = '🗑️ تم حذف المستخدم والبيانات المرتبطة به';
+            $type = 'success';
+        } else {
+            $msg = '⚠️ لا يمكنك حذف حسابك الحالي';
+            $type = 'warning';
+        }
     }
 
     if (isset($_POST['action'], $_POST['error_id']) && $_POST['action'] === 'mark_resolved') {
@@ -33,10 +57,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $type = 'success';
     }
 
+    if (isset($_POST['action']) && $_POST['action'] === 'mark_all_resolved') {
+        $pdo->exec('UPDATE error_logs SET resolved = 1');
+        $msg = '✅ تم تصنيف جميع الأخطاء على أنها محلولة';
+        $type = 'success';
+    }
+
     if (isset($_POST['action']) && $_POST['action'] === 'clear_logs') {
         $pdo->exec('DELETE FROM error_logs');
         $msg = '🧹 تم حذف سجلات الأخطاء';
         $type = 'info';
+    }
+
+    if (isset($_POST['action']) && $_POST['action'] === 'clear_sessions') {
+        $pdo->exec('DELETE FROM sessions');
+        $msg = '🧹 تم حذف جميع الجلسات';
+        $type = 'info';
+    }
+
+    if (isset($_POST['action']) && $_POST['action'] === 'clear_folders') {
+        $pdo->exec('DELETE FROM user_folders');
+        $msg = '🧹 تم حذف جميع المجلدات';
+        $type = 'info';
+    }
+
+    if (isset($_POST['action']) && $_POST['action'] === 'clear_repeat_requests') {
+        $pdo->exec('DELETE FROM repeat_requests');
+        $msg = '🧹 تم حذف جميع طلبات التكرار';
+        $type = 'info';
+    }
+
+    if (isset($_POST['action'], $_POST['session_id']) && $_POST['action'] === 'delete_session') {
+        $pdo->prepare('DELETE FROM sessions WHERE id = ?')->execute([(int)$_POST['session_id']]);
+        $msg = '🗑️ تم حذف الجلسة المحددة';
+        $type = 'success';
+    }
+
+    if (isset($_POST['action'], $_POST['folder_id']) && $_POST['action'] === 'delete_folder') {
+        $pdo->prepare('DELETE FROM user_folders WHERE id = ?')->execute([(int)$_POST['folder_id']]);
+        $msg = '🗑️ تم حذف المجلد المحدد';
+        $type = 'success';
+    }
+
+    if (isset($_POST['action'], $_POST['request_id']) && $_POST['action'] === 'delete_repeat_request') {
+        $pdo->prepare('DELETE FROM repeat_requests WHERE id = ?')->execute([(int)$_POST['request_id']]);
+        $msg = '🗑️ تم حذف طلب التكرار المحدد';
+        $type = 'success';
     }
 }
 
@@ -89,8 +155,24 @@ $stats = [
       <div class="quick-grid">
         <a class="quick-card" href="dashboard.php">📊 لوحة المستخدم</a>
         <form method="post" class="quick-card" style="padding:0; border:none; background:transparent;">
+          <input type="hidden" name="action" value="mark_all_resolved">
+          <button type="submit" class="btn-secondary" style="width:100%;">✅ تصنيف الكل محلول</button>
+        </form>
+        <form method="post" class="quick-card" style="padding:0; border:none; background:transparent;">
           <input type="hidden" name="action" value="clear_logs">
           <button type="submit" class="btn-secondary" style="width:100%;">🧹 حذف سجلات الأخطاء</button>
+        </form>
+        <form method="post" class="quick-card" style="padding:0; border:none; background:transparent;">
+          <input type="hidden" name="action" value="clear_sessions">
+          <button type="submit" class="btn-secondary" style="width:100%;">🧹 حذف جميع الجلسات</button>
+        </form>
+        <form method="post" class="quick-card" style="padding:0; border:none; background:transparent;">
+          <input type="hidden" name="action" value="clear_folders">
+          <button type="submit" class="btn-secondary" style="width:100%;">🧹 حذف جميع المجلدات</button>
+        </form>
+        <form method="post" class="quick-card" style="padding:0; border:none; background:transparent;">
+          <input type="hidden" name="action" value="clear_repeat_requests">
+          <button type="submit" class="btn-secondary" style="width:100%;">🧹 حذف جميع طلبات التكرار</button>
         </form>
       </div>
     </div>
@@ -121,6 +203,11 @@ $stats = [
                     <button type="submit" class="btn-secondary">إزالة المدير</button>
                   </form>
                 <?php endif; ?>
+                <form method="post" class="inline-form" onsubmit="return confirm('هل أنت متأكد من حذف هذا المستخدم وجميع بياناته؟');">
+                  <input type="hidden" name="action" value="delete_user">
+                  <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
+                  <button type="submit" class="btn-danger">🗑️ حذف المستخدم</button>
+                </form>
               </td>
             </tr>
           <?php endforeach; ?>
@@ -131,21 +218,42 @@ $stats = [
     <div class="card">
       <h2>📋 آخر الجلسات</h2>
       <?php if ($sessions): foreach ($sessions as $s): ?>
-        <div class="mini-card">#<?= (int)$s['id'] ?> — <?= htmlspecialchars($s['user_name'] ?: 'مستخدم') ?> — <?= htmlspecialchars($s['repo_name'] ?: '-') ?> — <?= htmlspecialchars($s['status'] ?: 'unknown') ?></div>
+        <div class="mini-card">
+          #<?= (int)$s['id'] ?> — <?= htmlspecialchars($s['user_name'] ?: 'مستخدم') ?> — <?= htmlspecialchars($s['repo_name'] ?: '-') ?> — <?= htmlspecialchars($s['status'] ?: 'unknown') ?>
+          <form method="post" class="inline-form" style="margin-top:6px;" onsubmit="return confirm('حذف هذه الجلسة؟');">
+            <input type="hidden" name="action" value="delete_session">
+            <input type="hidden" name="session_id" value="<?= (int)$s['id'] ?>">
+            <button type="submit" class="btn-danger">🗑️ حذف</button>
+          </form>
+        </div>
       <?php endforeach; else: ?><p>لا توجد جلسات.</p><?php endif; ?>
     </div>
 
     <div class="card">
       <h2>🔁 طلبات التكرار</h2>
       <?php if ($repeatRequests): foreach ($repeatRequests as $r): ?>
-        <div class="mini-card">#<?= (int)$r['id'] ?> — <?= htmlspecialchars($r['user_name'] ?: 'مستخدم') ?> — التكرار: <?= (int)$r['repeat_count'] ?> | مكتمل: <?= (int)$r['completed_count'] ?> | الحالة: <?= htmlspecialchars($r['status'] ?: 'unknown') ?></div>
+        <div class="mini-card">
+          #<?= (int)$r['id'] ?> — <?= htmlspecialchars($r['user_name'] ?: 'مستخدم') ?> — التكرار: <?= (int)$r['repeat_count'] ?> | مكتمل: <?= (int)$r['completed_count'] ?> | الحالة: <?= htmlspecialchars($r['status'] ?: 'unknown') ?>
+          <form method="post" class="inline-form" style="margin-top:6px;" onsubmit="return confirm('حذف طلب التكرار هذا؟');">
+            <input type="hidden" name="action" value="delete_repeat_request">
+            <input type="hidden" name="request_id" value="<?= (int)$r['id'] ?>">
+            <button type="submit" class="btn-danger">🗑️ حذف</button>
+          </form>
+        </div>
       <?php endforeach; else: ?><p>لا توجد طلبات تكرار.</p><?php endif; ?>
     </div>
 
     <div class="card">
       <h2>📁 آخر المجلدات</h2>
       <?php if ($folders): foreach ($folders as $f): ?>
-        <div class="mini-card">📂 <?= htmlspecialchars($f['folder_name']) ?> — المستخدم: <?= htmlspecialchars($f['user_name'] ?: 'مستخدم') ?> — <?= date('Y-m-d H:i', (int)$f['created_at']) ?></div>
+        <div class="mini-card">
+          📂 <?= htmlspecialchars($f['folder_name']) ?> — المستخدم: <?= htmlspecialchars($f['user_name'] ?: 'مستخدم') ?> — <?= date('Y-m-d H:i', (int)$f['created_at']) ?>
+          <form method="post" class="inline-form" style="margin-top:6px;" onsubmit="return confirm('حذف هذا المجلد؟');">
+            <input type="hidden" name="action" value="delete_folder">
+            <input type="hidden" name="folder_id" value="<?= (int)$f['id'] ?>">
+            <button type="submit" class="btn-danger">🗑️ حذف</button>
+          </form>
+        </div>
       <?php endforeach; else: ?><p>لا توجد مجلدات بعد.</p><?php endif; ?>
     </div>
 
