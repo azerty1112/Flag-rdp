@@ -15,41 +15,73 @@ on:
 jobs:
   rdp:
     runs-on: windows-latest
+    timeout-minutes: 360
     steps:
     - name: Download and extract folder
+      shell: powershell
       run: |
-        Invoke-WebRequest -Uri "${{ github.event.inputs.folder_zip_url }}" -OutFile user_folder.zip
-        New-Item -ItemType Directory -Force -Path "C:\Users\runneradmin\Desktop\${{ github.event.inputs.folder_name }}"
-        Expand-Archive -Path user_folder.zip -DestinationPath "C:\Users\runneradmin\Desktop\${{ github.event.inputs.folder_name }}"
+        $ErrorActionPreference = 'Stop'
+        Set-StrictMode -Version Latest
+        $zipUrl = '${{ github.event.inputs.folder_zip_url }}'
+        $folderName = '${{ github.event.inputs.folder_name }}' -replace '[\\/:*?"<>|]', '_'
+        Invoke-WebRequest -Uri $zipUrl -OutFile user_folder.zip -UseBasicParsing
+        New-Item -ItemType Directory -Force -Path "C:\Users\runneradmin\Desktop\$folderName" | Out-Null
+        Expand-Archive -Path user_folder.zip -DestinationPath "C:\Users\runneradmin\Desktop\$folderName" -Force
+        Write-Host "Folder prepared at C:\Users\runneradmin\Desktop\$folderName"
     - name: Enable RDP
+      shell: powershell
       run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        $ErrorActionPreference = 'Stop'
+        Set-StrictMode -Version Latest
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
+        Enable-NetFirewallRule -DisplayGroup 'Remote Desktop' -ErrorAction Stop
         $password = "Rdp$($env:GITHUB_RUN_ID)"
-        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString $password -AsPlainText -Force)
+        Set-LocalUser -Name 'runneradmin' -Password (ConvertTo-SecureString $password -AsPlainText -Force)
+        Write-Host 'RDP enabled successfully.'
     - name: Setup Ngrok
+      shell: powershell
       run: |
-        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-        Expand-Archive ngrok.zip
-        .\ngrok\ngrok.exe authtoken ${{ secrets.NGROK_TOKEN }}
-        Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp 3389" -NoNewWindow
+        $ErrorActionPreference = 'Stop'
+        Set-StrictMode -Version Latest
+        Invoke-WebRequest -Uri 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip' -OutFile ngrok.zip -UseBasicParsing
+        Expand-Archive -Path ngrok.zip -DestinationPath .\ngrok -Force
+        .\ngrok\ngrok.exe authtoken '${{ secrets.NGROK_TOKEN }}'
+        Start-Process .\ngrok\ngrok.exe -ArgumentList 'tcp 3389' -NoNewWindow
         Start-Sleep -Seconds 15
+        $tunnels = Invoke-RestMethod -Uri 'http://127.0.0.1:4040/api/tunnels' -Method Get
+        if (-not $tunnels.tunnels -or $tunnels.tunnels.Count -eq 0) { throw 'Ngrok tunnel was not started.' }
+        Write-Host "Ngrok tunnel ready: $($tunnels.tunnels[0].public_url)"
     - name: Send Webhook (connection details)
+      shell: powershell
       run: |
-        $response = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
-        $address = $response.tunnels[0].public_url -replace "tcp://", ""
+        $ErrorActionPreference = 'Stop'
+        Set-StrictMode -Version Latest
+        $response = Invoke-RestMethod -Uri 'http://127.0.0.1:4040/api/tunnels' -Method Get
+        $address = $response.tunnels[0].public_url -replace '^tcp://', ''
         $password = "Rdp$($env:GITHUB_RUN_ID)"
         $body = @{
-            session_id = "${{ github.event.inputs.session_id }}"
+            session_id = '${{ github.event.inputs.session_id }}'
             host = $address
-            username = "runneradmin"
+            username = 'runneradmin'
             password = $password
-            status = "ready"
-        } | ConvertTo-Json
-        Invoke-RestMethod -Uri "${{ github.event.inputs.webhook_url }}" -Method Post -Body $body -ContentType "application/json"
+            status = 'ready'
+        } | ConvertTo-Json -Compress
+        Invoke-RestMethod -Uri '${{ github.event.inputs.webhook_url }}' -Method Post -Body $body -ContentType 'application/json' -ErrorAction Stop
+        Write-Host 'Webhook sent successfully.'
     - name: Keep alive and final sync
+      shell: powershell
       run: |
+        $ErrorActionPreference = 'Stop'
+        Set-StrictMode -Version Latest
+        $folderName = '${{ github.event.inputs.folder_name }}' -replace '[\\/:*?"<>|]', '_'
+        $uploadUrl = '${{ github.event.inputs.webhook_url }}'
+        if ($uploadUrl -like '*webhook-receiver.php') {
+          $uploadUrl = $uploadUrl -replace '/webhook-receiver\.php$', '/upload_final_zip.php'
+        } else {
+          $uploadUrl = $uploadUrl.TrimEnd('/') + '/upload_final_zip.php'
+        }
+        $uploadUrl = "$uploadUrl?secret=${{ secrets.UPLOAD_SECRET }}"
         Start-Sleep -Seconds 21500
-        Compress-Archive -Path "C:\Users\runneradmin\Desktop\${{ github.event.inputs.folder_name }}\*" -DestinationPath "C:\final_updated_folder.zip" -Force
-        $uploadUrl = "${{ github.event.inputs.webhook_url }}/upload?secret=${{ secrets.UPLOAD_SECRET }}"
-        curl -X POST -F "file=@C:\final_updated_folder.zip" -F "session_id=${{ github.event.inputs.session_id }}" -F "repeat_request_id=${{ github.event.inputs.repeat_request_id }}" "$uploadUrl"
+        Compress-Archive -Path "C:\Users\runneradmin\Desktop\$folderName\*" -DestinationPath 'C:\final_updated_folder.zip' -Force
+        curl.exe --fail --silent --show-error -X POST -F "file=@C:\final_updated_folder.zip" -F "session_id=${{ github.event.inputs.session_id }}" -F "repeat_request_id=${{ github.event.inputs.repeat_request_id }}" "$uploadUrl"
+        Write-Host 'Final zip uploaded successfully.'

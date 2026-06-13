@@ -10,10 +10,14 @@ $sessions = $db->getPDO()->prepare("SELECT * FROM sessions WHERE user_id = ? ORD
 $sessions->execute([$user['id']]);
 $sessions = $sessions->fetchAll(PDO::FETCH_ASSOC);
 $canAccessAdmin = $auth->isAdmin();
+$folderCountStmt = $db->getPDO()->prepare('SELECT COUNT(*) FROM user_folders WHERE user_id = ?');
+$folderCountStmt->execute([$user['id']]);
+$repeatCountStmt = $db->getPDO()->prepare('SELECT COUNT(*) FROM repeat_requests WHERE user_id = ?');
+$repeatCountStmt->execute([$user['id']]);
 $stats = [
   'sessions' => count($sessions),
-  'folders' => $db->getPDO()->query("SELECT COUNT(*) FROM user_folders WHERE user_id = {$user['id']}")->fetchColumn(),
-  'repeat_requests' => $db->getPDO()->query("SELECT COUNT(*) FROM repeat_requests WHERE user_id = {$user['id']}")->fetchColumn(),
+  'folders' => (int)$folderCountStmt->fetchColumn(),
+  'repeat_requests' => (int)$repeatCountStmt->fetchColumn(),
 ];
 ?>
 <!DOCTYPE html>

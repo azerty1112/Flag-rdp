@@ -17,12 +17,27 @@ if (!$auth->isAdmin()) {
 $db = Database::getInstance();
 $pdo = $db->getPDO();
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['user_id'])) {
-    $targetUserId = (int)$_POST['user_id'];
-    $action = $_POST['action'] === 'make_admin' ? 1 : 0;
-    $pdo->prepare('UPDATE users SET is_admin = ? WHERE id = ?')->execute([$action, $targetUserId]);
-    $msg = $action ? '✅ تم منح الصلاحية للعضو المحدد' : '✅ تم إلغاء الصلاحية';
-    $type = 'success';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['action'], $_POST['user_id']) && in_array($_POST['action'], ['make_admin', 'remove_admin'], true)) {
+        $targetUserId = (int)$_POST['user_id'];
+        $action = $_POST['action'] === 'make_admin' ? 1 : 0;
+        $pdo->prepare('UPDATE users SET is_admin = ? WHERE id = ?')->execute([$action, $targetUserId]);
+        $msg = $action ? '✅ تم منح الصلاحية للعضو المحدد' : '✅ تم إلغاء الصلاحية';
+        $type = 'success';
+    }
+
+    if (isset($_POST['action'], $_POST['error_id']) && $_POST['action'] === 'mark_resolved') {
+        $errorId = (int)$_POST['error_id'];
+        $pdo->prepare('UPDATE error_logs SET resolved = 1 WHERE id = ?')->execute([$errorId]);
+        $msg = '✅ تم تصنيف الخطأ على أنه محلول';
+        $type = 'success';
+    }
+
+    if (isset($_POST['action']) && $_POST['action'] === 'clear_logs') {
+        $pdo->exec('DELETE FROM error_logs');
+        $msg = '🧹 تم حذف سجلات الأخطاء';
+        $type = 'info';
+    }
 }
 
 $users = $pdo->query('SELECT id, username, email, github_id, is_admin, created_at FROM users ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
@@ -36,6 +51,8 @@ $stats = [
   'sessions' => (int)$pdo->query('SELECT COUNT(*) FROM sessions')->fetchColumn(),
   'folders' => (int)$pdo->query('SELECT COUNT(*) FROM user_folders')->fetchColumn(),
   'repeat_requests' => (int)$pdo->query('SELECT COUNT(*) FROM repeat_requests')->fetchColumn(),
+  'errors' => (int)$pdo->query('SELECT COUNT(*) FROM error_logs')->fetchColumn(),
+  'resolved_errors' => (int)$pdo->query('SELECT COUNT(*) FROM error_logs WHERE resolved = 1')->fetchColumn(),
 ];
 ?>
 <!DOCTYPE html>
@@ -62,6 +79,20 @@ $stats = [
       <div class="stat-card"><strong><?= $stats['sessions'] ?></strong><span>جلسة</span></div>
       <div class="stat-card"><strong><?= $stats['folders'] ?></strong><span>مجلد</span></div>
       <div class="stat-card"><strong><?= $stats['repeat_requests'] ?></strong><span>طلب تكرار</span></div>
+      <div class="stat-card"><strong><?= $stats['errors'] ?></strong><span>خطأ مسجل</span></div>
+      <div class="stat-card"><strong><?= $stats['resolved_errors'] ?></strong><span>خطأ محلول</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>📈 نظرة سريعة</h2><span class="status-pill">نسخة متقدمة</span></div>
+      <p class="muted">يمكنك من هنا إدارة المستخدمين، متابعة الجلسات، ومراجعة الأخطاء الأخيرة بشكل مباشر.</p>
+      <div class="quick-grid">
+        <a class="quick-card" href="dashboard.php">📊 لوحة المستخدم</a>
+        <form method="post" class="quick-card" style="padding:0; border:none; background:transparent;">
+          <input type="hidden" name="action" value="clear_logs">
+          <button type="submit" class="btn-secondary" style="width:100%;">🧹 حذف سجلات الأخطاء</button>
+        </form>
+      </div>
     </div>
 
     <div class="card">
@@ -105,26 +136,33 @@ $stats = [
     </div>
 
     <div class="card">
-      <h2>� طلبات التكرار</h2>
+      <h2>🔁 طلبات التكرار</h2>
       <?php if ($repeatRequests): foreach ($repeatRequests as $r): ?>
         <div class="mini-card">#<?= (int)$r['id'] ?> — <?= htmlspecialchars($r['user_name'] ?: 'مستخدم') ?> — التكرار: <?= (int)$r['repeat_count'] ?> | مكتمل: <?= (int)$r['completed_count'] ?> | الحالة: <?= htmlspecialchars($r['status'] ?: 'unknown') ?></div>
       <?php endforeach; else: ?><p>لا توجد طلبات تكرار.</p><?php endif; ?>
     </div>
 
     <div class="card">
-      <h2>�📁 آخر المجلدات</h2>
+      <h2>📁 آخر المجلدات</h2>
       <?php if ($folders): foreach ($folders as $f): ?>
         <div class="mini-card">📂 <?= htmlspecialchars($f['folder_name']) ?> — المستخدم: <?= htmlspecialchars($f['user_name'] ?: 'مستخدم') ?> — <?= date('Y-m-d H:i', (int)$f['created_at']) ?></div>
       <?php endforeach; else: ?><p>لا توجد مجلدات بعد.</p><?php endif; ?>
     </div>
 
     <div class="card">
-      <h2>⚠️ تفاصيل الأخطاء الأخيرة</h2>
+      <div class="card-header"><h2>⚠️ تفاصيل الأخطاء الأخيرة</h2><span class="status-pill">سجل مراقبة</span></div>
       <?php if ($errorLogs): foreach ($errorLogs as $e): ?>
         <article class="error-card">
           <div class="error-title">[<?= htmlspecialchars($e['error_type'] ?: 'UNKNOWN') ?>] <?= htmlspecialchars($e['message']) ?></div>
-          <div class="error-meta">المستخدم: <?= htmlspecialchars($e['user_name'] ?: 'ضيف') ?> | المسار: <?= htmlspecialchars($e['file_path'] ?: '-') ?> | السطر: <?= (int)($e['line_number'] ?? 0) ?> | الوقت: <?= date('Y-m-d H:i', (int)$e['created_at']) ?></div>
+          <div class="error-meta">المستخدم: <?= htmlspecialchars($e['user_name'] ?: 'ضيف') ?> | المسار: <?= htmlspecialchars($e['file_path'] ?: '-') ?> | السطر: <?= (int)($e['line_number'] ?? 0) ?> | الوقت: <?= date('Y-m-d H:i', (int)$e['created_at']) ?> | الحالة: <?= !empty($e['resolved']) ? 'محلول' : 'قيد المراجعة' ?></div>
           <?php if (!empty($e['trace'])): ?><pre class="trace-box"><?= htmlspecialchars($e['trace']) ?></pre><?php endif; ?>
+          <?php if (empty($e['resolved'])): ?>
+            <form method="post" class="inline-form" style="margin-top:8px;">
+              <input type="hidden" name="action" value="mark_resolved">
+              <input type="hidden" name="error_id" value="<?= (int)$e['id'] ?>">
+              <button type="submit" class="btn-secondary">✅ تحديد كـ محلول</button>
+            </form>
+          <?php endif; ?>
         </article>
       <?php endforeach; else: ?><p>لا توجد أخطاء مسجلة حتى الآن.</p><?php endif; ?>
     </div>

@@ -18,12 +18,14 @@ if ($auth->isLoggedIn()) header('Location: dashboard.php');
             <div class="badge-card"><strong>📁 مزامنة</strong><span>رفع ZIP وإدارة المجلدات بشكل واضح</span></div>
         </div>
         <a href="github-login.php" class="btn-github">🔐 تسجيل الدخول عبر GitHub</a>
+        <p class="muted" style="margin-top:12px;color:#dbe4ff;">ملاحظة: تحتاج إلى تعيين GITHUB_CLIENT_ID و GITHUB_CLIENT_SECRET و APP_URL في بيئة التشغيل قبل استخدام تسجيل الدخول.</p>
 
         <div class="feature-grid">
             <article class="feature-card"><h3>🧭 لوحة تحكم ذكية</h3><p>تابع الجلسات، راجع آخر المجلدات، واطلع على الحالة العامة من مكان واحد.</p></article>
             <article class="feature-card"><h3>🛠️ إدارة مدبرة</h3><p>منح أو إزالة صلاحية المدير بسهولة مع أدوات تنسيق واضحة ومرئية.</p></article>
             <article class="feature-card"><h3>📊 تفاصيل الأخطاء</h3><p>تتبّع المشاكل بسرعة مع سجلات مفصلة لتسهيل التصحيح السريع.</p></article>
         </div>
+        <div class="footer-note">الحالة الحالية: جاهز للتشغيل بعد إعداد GitHub و APP_URL في البيئة.</div>
     </div></div>
 </body>
 </html>

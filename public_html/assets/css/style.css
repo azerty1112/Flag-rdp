@@ -52,3 +52,5 @@ body{font-family:Segoe UI, Arial, sans-serif;background:linear-gradient(135deg,#
 .stack-form{display:flex;flex-direction:column;gap:10px;max-width:420px;}
 .stack-form input, .stack-form button{width:100%;}
 .muted{color:#6b7280;font-size:0.95rem;}
+.footer-note{margin-top:18px;color:#dbe4ff;font-size:0.95rem;}
+
