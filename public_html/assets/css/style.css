@@ -39,6 +39,8 @@ body{font-family:Segoe UI, Arial, sans-serif;background:linear-gradient(135deg,#
 .alert.success{background:#d4edda;color:#155724;}
 .alert.error{background:#f8d7da;color:#721c24;}
 .alert.info{background:#e7f3ff;color:#0c4a6e;}
+.alert strong{display:block;margin-bottom:4px;font-size:0.98rem;}
+.alert small{display:block;margin-top:6px;color:inherit;opacity:0.9;}
 .status-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:0.9rem;font-weight:700;}
 .feature-grid{grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:16px;}
 .quick-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-top:10px;}

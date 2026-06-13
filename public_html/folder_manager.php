@@ -6,22 +6,34 @@ $auth = new Auth();
 if (!$auth->isLoggedIn()) header('Location: index.php');
 $user = $auth->getUser();
 $folderSync = new FolderSync();
+$alertTitle = '';
+$alertDetails = '';
+$alertLocation = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['folder_zip'])) {
     $result = $folderSync->uploadFolder($user['id'], $_FILES['folder_zip'], $_POST['folder_name']);
-    $msg = $result['error'] ?? ($result['success'] ? '✅ تم رفع المجلد بنجاح وسيظهر في لوحة الإدارة' : '❌ حدث خطأ أثناء الرفع');
+    $alertTitle = $result['error'] ?? ($result['success'] ? '✅ تم رفع المجلد بنجاح وسيظهر في لوحة الإدارة' : '❌ حدث خطأ أثناء الرفع');
     $type = !empty($result['success']) ? 'success' : 'error';
-    if (!empty($result['details'])) {
-        $msg .= ' — ' . $result['details'];
-    }
+    $alertDetails = $result['details'] ?? '';
+    $alertLocation = $result['location'] ?? '';
 }
 if (isset($_POST['repeat_sync'])) {
     $folderId = intval($_POST['folder_id']);
     $repeatCount = intval($_POST['repeat_count']);
     if ($repeatCount >= 1 && $repeatCount <= MAX_REPEAT_SESSIONS) {
-        $requestId = $folderSync->createRepeatRequest($user['id'], $folderId, $repeatCount);
-        $msg = $requestId ? "✅ بدأت أول جلسة من {$repeatCount}" : "❌ فشل";
-        $type = 'info';
-    } else $msg = "عدد التكرار غير صالح";
+        $result = $folderSync->createRepeatRequest($user['id'], $folderId, $repeatCount);
+        if (!empty($result['success'])) {
+            $alertTitle = "✅ بدأت أول جلسة من {$repeatCount}";
+            $type = 'success';
+        } else {
+            $alertTitle = '❌ ' . ($result['error'] ?? 'فشل بدء التكرار');
+            $type = 'error';
+            $alertDetails = $result['details'] ?? '';
+            $alertLocation = $result['location'] ?? '';
+        }
+    } else {
+        $alertTitle = 'عدد التكرار غير صالح';
+        $type = 'error';
+    }
 }
 $folders = $folderSync->getUserFolders($user['id']);
 ?>
@@ -32,7 +44,13 @@ $folders = $folderSync->getUserFolders($user['id']);
     <div class="container">
         <h1>📁 المجلدات المتزامنة</h1>
         <a href="dashboard.php" class="back-link">← العودة</a>
-        <?php if (isset($msg)) echo "<div class='alert $type'>$msg</div>"; ?>
+        <?php if (!empty($alertTitle) || !empty($alertDetails) || !empty($alertLocation)): ?>
+            <div class="alert <?= htmlspecialchars($type ?? 'info') ?>">
+                <strong><?= htmlspecialchars($alertTitle) ?></strong>
+                <?php if (!empty($alertDetails)): ?><small><?= htmlspecialchars($alertDetails) ?></small><?php endif; ?>
+                <?php if (!empty($alertLocation)): ?><small>الموقع: <?= htmlspecialchars($alertLocation) ?></small><?php endif; ?>
+            </div>
+        <?php endif; ?>
         <div class="card"><h3>رفع مجلد جديد (ZIP)</h3>
             <p class="muted">الحد الأقصى للحجم: <?= number_format(MAX_FILE_SIZE / 1024 / 1024, 1) ?> ميغابايت. الملفات غير الصالحة ستُعرض مع تفاصيل الخطأ.</p>
             <form method="post" enctype="multipart/form-data" class="stack-form">
