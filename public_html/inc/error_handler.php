@@ -8,6 +8,7 @@ function app_log_error($type, $message, $file = null, $line = null, $trace = nul
             'INSERT INTO error_logs (user_id, error_type, message, file_path, line_number, trace, request_uri, created_at, resolved) ' .
             'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)'
         );
+        $traceText = is_array($trace) ? print_r($trace, true) : (string)$trace;
         $userId = $_SESSION['user_id'] ?? null;
         $stmt->execute([
             $userId,
@@ -15,7 +16,7 @@ function app_log_error($type, $message, $file = null, $line = null, $trace = nul
             substr((string)$message, 0, 2000),
             $file,
             $line,
-            $trace ? substr($trace, 0, 4000) : null,
+            $traceText !== '' ? substr($traceText, 0, 4000) : null,
             $_SERVER['REQUEST_URI'] ?? null,
             time(),
         ]);

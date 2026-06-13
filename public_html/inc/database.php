@@ -1,4 +1,15 @@
 <?php
+if (!defined('DB_PATH')) {
+    if (!function_exists('env')) {
+        function env($key, $default = null) {
+            $value = getenv($key);
+            return ($value === false || $value === '') ? $default : $value;
+        }
+    }
+
+    define('DB_PATH', env('DB_PATH', __DIR__ . '/../../database/sessions.db'));
+}
+
 class Database {
     private static $instance = null;
     private $pdo;
