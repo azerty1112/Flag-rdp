@@ -51,9 +51,13 @@ class FolderSync {
         }
 
         $auth = new Auth();
-        $githubToken = $auth->getGithubToken($userId);
+        $githubToken = $auth->getGithubToken($userId) ?: PLATFORM_GITHUB_TOKEN;
         if (!$githubToken) {
-            return ['error' => 'لم يتم العثور على رمز GitHub', 'details' => 'يرجى تسجيل الدخول مرة أخرى عبر GitHub قبل بدء التكرار.', 'location' => 'FolderSync::createRepeatRequest'];
+            return [
+                'error' => 'لم يتم العثور على رمز GitHub',
+                'details' => 'لا يوجد رمز GitHub صالح متاح الآن. أضف PLATFORM_GITHUB_TOKEN في متغيرات البيئة أو أعد تسجيل الدخول عبر GitHub ثم جرّب مرة أخرى.',
+                'location' => 'FolderSync::createRepeatRequest'
+            ];
         }
 
         $api = new GitHubAPI($githubToken);
@@ -64,7 +68,7 @@ class FolderSync {
 
         if ($result['code'] !== 201) {
             $message = $result['body']['message'] ?? 'فشل إنشاء المستودع على GitHub';
-            $details = $result['body']['errors'][0]['message'] ?? 'تحقق من صلاحية الوصول أو إعدادات القالب.';
+            $details = $result['body']['errors'][0]['message'] ?? 'تحقق من صلاحية الوصول أو إعدادات القالب. إذا كان الرمز غير صالح، أعد تهيئة PLATFORM_GITHUB_TOKEN.';
             app_log_error('GITHUB', 'فشل إنشاء مستودع التكرار', __FILE__, __LINE__, $message, ['code' => $result['code'], 'repo' => $repoName, 'owner' => $username, 'details' => $details]);
             return ['error' => 'فشل إنشاء المستودع', 'details' => $details, 'location' => 'FolderSync::createRepeatRequest'];
         }
@@ -82,7 +86,7 @@ class FolderSync {
     }
     private function startSession($userId, $repoName, $folderId, $sessionId, $requestId) {
         $auth = new Auth();
-        $githubToken = $auth->getGithubToken($userId);
+        $githubToken = $auth->getGithubToken($userId) ?: PLATFORM_GITHUB_TOKEN;
         if (!$githubToken) {
             return false;
         }

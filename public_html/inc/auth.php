@@ -28,7 +28,10 @@ class Auth {
         $stmt = $this->db->getPDO()->prepare("SELECT github_token FROM user_tokens WHERE user_id = ?");
         $stmt->execute([$userId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ? Security::decrypt($row['github_token']) : null;
+        if (!$row || empty($row['github_token'])) return null;
+
+        $token = Security::decrypt($row['github_token']);
+        return ($token !== false && $token !== null && $token !== '') ? $token : null;
     }
     public function loginWithGitHub($githubId, $username, $email, $token) {
         $stmt = $this->db->getPDO()->prepare("SELECT * FROM users WHERE github_id = ?");
